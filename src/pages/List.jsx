@@ -1,97 +1,81 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import VirtualizedList from '../components/VirtualizedList';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import VirtualizedTable from '../components/VirtualizedTable';
 
 const List = () => {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Intentional Bug: Missing dependency in useEffect causing stale closure.
-  // The username could change but this effect won't re-run.
-  // We use user.username in fetchData but don't include user.username in the dependency array.
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch('https://backend.jotish.in/backend_dev/gettabledata.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            username: user.username, 
-            password: 'Test123' 
-          })
-        });
+  const calculateStats = () => {
+    console.log('Running expensive stats calculation...');
+    let total = 0;
+    for (let i = 0; i < 1000000; i++) {
+      total += Math.sqrt(i);
+    }
+    return total;
+  };
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch data');
-        }
+  const stats = calculateStats();
 
-        const result = await response.json();
-        if (result && result.TABLE_DATA && result.TABLE_DATA.data) {
-          setData(result.TABLE_DATA.data);
-        } else {
-          throw new Error('Invalid data format received');
-        }
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('https://backend.jotish.in/backend_dev/gettabledata.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: 'test',
+          password: '123456',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
       }
-    };
 
+      const result = await response.json();
+      setData(Array.isArray(result) ? result : (result.data || []));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchData();
-  }, [user.username]); 
-
-  const handleRowClick = (item) => {
-    // Navigate to details page using the employee ID (index 3 in the array)
-    const employeeId = item[3];
-    navigate(`/details/${employeeId}`);
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/');
-  };
+  }, [fetchData]);
 
   return (
-    <div className="min-h-screen bg-neutral-950 p-6 flex flex-col">
-      <header className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Employee Roster</h1>
-          <p className="text-neutral-400 text-sm mt-1">Found {data.length} records</p>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="sm:flex sm:items-center mb-8">
+        <div className="sm:flex-auto">
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Active Employees</h1>
+          <p className="mt-2 text-sm text-gray-700 dark:text-gray-400">
+            A comprehensive list of all employees in the system with virtualization for high performance.
+          </p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-neutral-400">
-            Logged in as <span className="text-white font-medium">{user?.username}</span>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg text-sm transition-colors"
-          >
-            Logout
-          </button>
-        </div>
-      </header>
+      </div>
 
-      <main className="flex-1 min-h-0">
-        {loading ? (
-          <div className="h-full flex items-center justify-center text-neutral-400">
-            Loading directory data...
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        </div>
+      ) : error ? (
+        <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg text-red-600 dark:text-red-400 text-center">
+          Error: {error}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg flex justify-between items-center">
+            <span className="text-indigo-700 dark:text-indigo-300 font-medium"> Total Records: {data.length} </span>
+            <span className="text-xs text-indigo-500 dark:text-indigo-400"> (System Stats ready) </span>
           </div>
-        ) : error ? (
-          <div className="h-full flex items-center justify-center text-red-500">
-            Error: {error}
-          </div>
-        ) : (
-          <VirtualizedList data={data} onRowClick={handleRowClick} />
-        )}
-      </main>
+          <VirtualizedTable data={data} />
+        </div>
+      )}
     </div>
   );
 };

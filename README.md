@@ -1,84 +1,67 @@
 # Employee Insights Dashboard
 
-A production-ready React application showcasing custom virtualization, media capturing, canvas manipulation, and data visualization utilizing raw SVGs without relying on any external component, charting, or virtualization libraries.
+A production-grade React application for employee management, featuring high-performance data grids, custom virtualization, and identity verification modules.
 
-## Setup Instructions
+## 🚀 Architecture
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
+Built with **React 19**, **Vite**, and **Tailwind CSS v4**.
 
-2. Run the development server:
-   ```bash
-   npm run dev
-   ```
+-   **Modular Component Design**: Decoupled UI components for high reusability.
+-   **State Management**: React Context API (`AuthContext`) for global authentication and state persistence via `localStorage`.
+-   **Routing**: Secure route protection using React Router with `PrivateRoute` wrappers.
+-   **Performance First**: Custom virtualization logic ensures 10,000+ records can be displayed with minimal DOM footprint.
+-   **Native APIs**: Integration with Browser Camera API for profile capture and HTML5 Canvas for digital signatures.
 
-3. Login Credentials:
-   - **Username:** `testuser`
-   - **Password:** `Test123`
+## 📊 Virtualization Logic
 
----
+The `VirtualizedTable` uses a custom `useVirtualScroll` hook to optimize rendering.
 
-## 1. Custom Virtualization Math
+### Math Breakdown:
+-   **startIndex**: `floor(scrollTop / rowHeight)`
+    -   Determines the first visible row based on how far the user has scrolled.
+-   **visibleRows**: `ceil(containerHeight / rowHeight)`
+    -   Calculates how many rows can fit in the visible area.
+-   **endIndex**: `startIndex + visibleRows + buffer`
+    -   The last row to render, adding a small `buffer` to prevent flicker during fast scrolling.
+-   **Spacer**: A `div` with `height: totalItemCount * rowHeight` handles the scrollbar size.
+-   **Absolute Positioning**: Rows are placed inside the spacer using `translateY(startIndex * rowHeight)` to maintain their correct vertical position.
 
-The List page (`/list`) implements a highly performant custom virtualized grid to render thousands of rows smoothly by only keeping visible rows inside the DOM.
+## 🖼️ Image Merge Logic
 
-**Logic Breakdown:**
-- **Scroll container**: Contains a large inner `div` determining the total height (`data.length * rowHeight`) to trigger native scrollbars.
-- **`scrollTop` Tracking**: We listen to `onScroll` to grab the current scroll position in pixels.
-- **Row Calculation**:
-  ```javascript
-  const start = Math.floor(scrollTop / rowHeight);
-  const visibleRowCount = Math.ceil(containerHeight / rowHeight);
-  ```
-- **Buffer**: We add a `buffer = 5` to render rows slightly off-screen (above and below the viewport) to prevent flickering during fast scrolls.
-  ```javascript
-  const visibleStartIndex = Math.max(0, start - buffer);
-  const visibleEndIndex = Math.min(data.length - 1, start + visibleRowCount + buffer);
-  ```
-- **Absolute Positioning**: Visibile components are rendered identically but positioned absolutely using `top: ${index * rowHeight}px`, making them snap accurately into the massive blank scrollable div.
+The identity verification flow merges a profile photo and an e-signature programmatically:
 
-## 2. Image Merge Logic
+1.  **Capture**: Photo is captured as a Base64 DataURL from the video stream.
+2.  **Draw**: Signature is drawn on a secondary HTML5 Canvas.
+3.  **Merge**: A third hidden canvas is created.
+4.  **Compose**:
+    -   The photo is drawn as the background layer.
+    -   A semi-transparent white overlay is applied to the signature area for readability.
+    -   The signature canvas is drawn over the photo with a 40% scaling factor.
+5.  **Export**: The final result is exported using `canvas.toDataURL('image/png')`.
 
-The Details page (`/details/:id`) leverages browser APIs to fetch the webcam feed, draw it along with a manual signature entirely inside isolated HTML5 canvases.
+## 🗺️ City Mapping
 
-**Logic Breakdown:**
-1. **Camera Feed**: We capture frames continuously to a standard `<video>`.
-2. **First Canvas (Photo)**: When "Capture Photo" is clicked, we call `ctx.drawImage(video, 0, 0)` onto a dedicated `photoCanvas` drawing exact pixel data.
-3. **Second Canvas (Signature)**: An overlaid transparent canvas captures drawing paths directly by calculating `(clientX - rect.left)` over `mousemove/touchmove` events.
-4. **Merge Canvas (Offscreen)**: Upon finalizing, we create an invisible `offscreenCanvas` in memory:
-   ```javascript
-   const offscreenCanvas = document.createElement('canvas');
-   const ctx = offscreenCanvas.getContext('2d');
-   
-   // 1. Draw base photo
-   ctx.drawImage(photoCanvasRef.current, 0, 0);
-   // 2. Overlay signature
-   ctx.drawImage(signatureCanvasRef.current, 0, 0);
-   
-   // 3. Export
-   const finalImage = offscreenCanvas.toDataURL('image/png');
-   ```
+City markers are placed on an interactive map using predefined geographic coordinates:
 
-## 3. Intentional Bug Documentation
+| City | Latitude | Longitude |
+| :--- | :--- | :--- |
+| Mumbai | 19.0760 | 72.8777 |
+| Delhi | 28.7041 | 77.1025 |
+| Bangalore | 12.9716 | 77.5946 |
+| Chennai | 13.0827 | 80.2707 |
 
-**Location:** `src/pages/List.jsx`
-**Type:** Stale Closure / Missing Dependency Array inside `useEffect`
+## 🐞 Intentional Performance Bug
 
-**Explanation:**
-The API fetch logic consumes `user.username` implicitly from a broader functional scope but omits it in the dependency array:
+**Location**: `src/pages/List.jsx`
 
-```javascript
-useEffect(() => {
-  const fetchData = async () => { ... } // Uses `user.username` inside POST body
-  fetchData();
-}, []); // <-- Intentional Bug: `user` or `user.username` is missing here.
-```
+**The Bug**:
+The `calculateStats` function is called on every single render cycle of the `List` component.
 
-**Why it's a bug:**
-If the user's role, locale, or identity abruptly changes mid-session or isn't fully initialized on mount, the `useEffect` acts entirely as a `componentDidMount` hook. It seals off `user.username` into a closure. It will therefore never refetch new data specific to the newest user token unless the component completely unmounts and remounts, leading to fetching errors or stale state representations.
+**Why it causes issues**:
+1.  **Expensive Computation**: It contains a tight loop running 1,000,000 iterations of `Math.sqrt`, consuming significant CPU cycles.
+2.  **Missing Memoization**: It is not wrapped in `useMemo` or `useCallback`.
+3.  **Frequent Triggers**: Any state update in the `List` page (like scrolling through the virtualized table) causes the component to re-render, triggering this expensive calculation every time and leading to "jank" and frame drops.
 
 ---
 
-*Built with Vite, React 19, and Tailwind CSS v4.*
+Built by Antigravity - Senior React Engineer.
